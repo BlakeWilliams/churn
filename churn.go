@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -27,7 +28,7 @@ func main() {
 	date := "2023-02-25"
 
 	var out bytes.Buffer
-	cmd := exec.Command("git", "log", "--numstat", "--since", date, "--pretty=format:", "--diff-filter=AMRCD")
+	cmd := exec.Command(gitPath(), "log", "--numstat", "--since", date, "--pretty=format:", "--diff-filter=AMRCD")
 	cmd.Stdout = &out
 
 	err := cmd.Run()
@@ -113,4 +114,16 @@ func main() {
 	}
 
 	fmt.Println(string(res))
+}
+
+func gitPath() string {
+	path, err := exec.LookPath("git")
+	if errors.Is(err, exec.ErrDot) {
+		err = nil
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	return path
 }
