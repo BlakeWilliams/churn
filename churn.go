@@ -3,31 +3,31 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
 
 var partsRegex = regexp.MustCompile(`\s+`)
-var renameRegex = regexp.MustCompile(`{(.+)=>(.+)}`)
+var renameRegex = regexp.MustCompile(`(.*){(.+)=>(.+)}(.*)`)
 
 type File struct {
-	CurrentName    string
-	MostRecentName string
-
-	TimesModified int
-
-	Additions int
-	Deletions int
+	CurrentName    string `json:"name"`
+	MostRecentName string `json:"-"`
+	TimesModified  int    `json:"updates"`
+	Additions      int    `json:"additions"`
+	Deletions      int    `json:"deletions"`
 }
 
 func main() {
-	date := "2025-02-25"
+	date := "2023-02-25"
 
 	var out bytes.Buffer
-	cmd := exec.Command("git", "log", "--since", date, "--pretty=format:", "--diff-filter=AMRCD")
+	cmd := exec.Command("git", "log", "--numstat", "--since", date, "--pretty=format:", "--diff-filter=AMRCD")
 	cmd.Stdout = &out
 
 	err := cmd.Run()
@@ -44,11 +44,15 @@ func main() {
 		if err != nil {
 			break
 		}
-		if len(line) == 0 {
+		if len(strings.TrimSpace(line)) == 0 {
 			continue
 		}
 
 		parts := partsRegex.Split(line, 3)
+		if parts[0] == "-" {
+			continue
+		}
+
 		additions, err := strconv.Atoi(parts[0])
 		if err != nil {
 			panic(err)
@@ -57,16 +61,23 @@ func main() {
 		if err != nil {
 			panic(err)
 		}
-		filename := parts[2]
+		filename := strings.TrimSpace(parts[2])
 
 		if renameRegex.MatchString(filename) {
 			renameParts := renameRegex.FindStringSubmatch(filename)
-			left := renameParts[1]
-			right := renameParts[2]
 
-			for _, file := range files {
-				if left == file.CurrentName || (strings.HasPrefix(left, file.CurrentName) && strings.TrimPrefix(left, file.CurrentName)[0] == '/') {
-					file.CurrentName = right
+			commonPrefix := renameParts[1]
+			left := strings.TrimSpace(renameParts[2])
+			right := strings.TrimSpace(renameParts[3])
+			commonSuffix := renameParts[4]
+
+			right = fmt.Sprintf("%s%s", commonPrefix, right)
+
+			for k, file := range files {
+				if right == file.CurrentName || (strings.HasPrefix(right, file.CurrentName) && strings.TrimPrefix(right, file.CurrentName)[0] == '/') && strings.HasSuffix(right, commonSuffix) {
+					file.CurrentName = commonPrefix + left + commonSuffix
+					delete(files, k)
+					files[file.CurrentName] = file
 				}
 			}
 
@@ -84,4 +95,22 @@ func main() {
 		files[filename].Deletions += deletions
 		files[filename].TimesModified++
 	}
+
+	allFiles := []*File{}
+
+	for _, file := range files {
+		allFiles = append(allFiles, file)
+	}
+
+	// sort by times changed descending
+	sort.Slice(allFiles, func(i, j int) bool {
+		return allFiles[i].TimesModified > allFiles[j].TimesModified
+	})
+
+	res, err := json.MarshalIndent(allFiles, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Println(string(res))
 }
