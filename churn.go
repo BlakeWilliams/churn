@@ -50,15 +50,13 @@ func main() {
 		panic(err)
 	}
 
+	// TODO, replace with trie to avoid $$$ loop
 	files := map[string]*File{}
 
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 
-		if err != nil {
-			break
-		}
 		if len(strings.TrimSpace(line)) == 0 {
 			continue
 		}
