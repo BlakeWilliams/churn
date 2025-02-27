@@ -38,9 +38,13 @@ func main() {
 	if flagDir != nil {
 		cmd.Dir = *flagDir
 	}
-	cmd.Stdout = &out
 
-	err := cmd.Run()
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		panic(err)
+	}
+
+	err = cmd.Start()
 	if err != nil {
 		fmt.Println(out.String())
 		panic(err)
@@ -48,9 +52,10 @@ func main() {
 
 	files := map[string]*File{}
 
-	reader := bufio.NewReader(&out)
-	for {
-		line, err := reader.ReadString('\n')
+	scanner := bufio.NewScanner(stdout)
+	for scanner.Scan() {
+		line := scanner.Text()
+
 		if err != nil {
 			break
 		}
@@ -104,6 +109,16 @@ func main() {
 		files[filename].Additions += additions
 		files[filename].Deletions += deletions
 		files[filename].TimesModified++
+	}
+
+	if err := scanner.Err(); err != nil {
+		fmt.Println("Error reading output")
+		panic(err)
+	}
+
+	err = cmd.Wait()
+	if err != nil {
+		panic(err)
 	}
 
 	allFiles := []*File{}
