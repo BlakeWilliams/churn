@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"flag"
 	"fmt"
 	"os/exec"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var partsRegex = regexp.MustCompile(`\s+`)
@@ -25,10 +27,17 @@ type File struct {
 }
 
 func main() {
-	date := "2023-02-25"
+	defaultDate := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	flagSince := flag.String("since", defaultDate, "The date to get churn for")
+	flagDir := flag.String("dir", ".", "The directory to get churn for")
+
+	flag.Parse()
 
 	var out bytes.Buffer
-	cmd := exec.Command(gitPath(), "log", "--numstat", "--since", date, "--pretty=format:", "--diff-filter=AMRCD")
+	cmd := exec.Command(gitPath(), "log", "--numstat", "--since", *flagSince, "--pretty=format:", "--diff-filter=AMRCD")
+	if flagDir != nil {
+		cmd.Dir = *flagDir
+	}
 	cmd.Stdout = &out
 
 	err := cmd.Run()
